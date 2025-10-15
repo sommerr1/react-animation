@@ -32,11 +32,14 @@
     "push:github": "git add . ; git commit -m \"Update project\" ; git push origin master",
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "build:netlify": "npm run build && npx netlify deploy --prod --dir=build",
+    "deploy:preview": "npm run build && npx netlify deploy --dir=build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
   "devDependencies": {
-    "kill-port": "^2.0.1"
+    "kill-port": "^2.0.1",
+    "netlify-cli": "^17.0.0"
   },
   "eslintConfig": {
     "extends": [
