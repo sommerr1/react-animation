@@ -29,6 +29,71 @@
         "panel": "new"
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Push to GitHub",
+      "type": "shell",
+      "command": "git",
+      "args": [
+        "add",
+        "."
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Commit and Push to GitHub",
+      "type": "shell",
+      "command": "git",
+      "args": [
+        "commit",
+        "-m",
+        "${input:commitMessage}"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": [],
+      "dependsOrder": "sequence",
+      "dependsOn": "Push to GitHub"
+    },
+    {
+      "label": "Push to Remote",
+      "type": "shell",
+      "command": "git",
+      "args": [
+        "push",
+        "origin",
+        "master"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      },
+      "problemMatcher": [],
+      "dependsOrder": "sequence",
+      "dependsOn": "Commit and Push to GitHub"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "commitMessage",
+      "description": "Enter commit message",
+      "default": "Update project",
+      "type": "promptString"
     }
   ]
 }
