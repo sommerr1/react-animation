@@ -18,7 +18,7 @@ function Model({ modelPath, scale = 1, position = [0, 0, 0], isNodding, setIsNod
   const { scene, animations } = useGLTF(modelPath);
   const groupRef = useRef<THREE.Group>(null);
   const { actions, names } = useAnimations(animations, groupRef);
-  const { setAnimations, setCurrentAnimation, setIsPlaying, currentAnimation, isPlaying, mousePosition } = useAnimation();
+  const { setAnimations, setCurrentAnimation, currentAnimation, isPlaying, mousePosition } = useAnimation();
   const nodState = useRef({ direction: 1, angle: 0, count: 0, target: 2 }); // target: сколько кивков сделать
   const shakeState = useRef({ direction: 1, angle: 0, count: 0, target: 2 });
 
@@ -124,7 +124,7 @@ function Model({ modelPath, scale = 1, position = [0, 0, 0], isNodding, setIsNod
 }
 
 export default function ModelViewer({ modelPath, scale = 1, position = [0, 0, 0] }: ModelViewerProps) {
-  const { animations, currentAnimation, isPlaying, handleAnimationChange, handlePlayPause, setMousePosition } = useAnimation();
+  const { animations, currentAnimation, isPlaying, handleAnimationChange, handlePlayPause } = useAnimation();
   const { showButtons, toggleButtons, backgroundImage, setBackgroundImage } = useUI();
   const [isNodding, setIsNodding] = useState(false);
   const [isShaking, setIsShaking] = useState(false);

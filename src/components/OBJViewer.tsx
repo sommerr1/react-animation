@@ -18,7 +18,6 @@ interface OBJViewerProps {
 // Компонент для модели с текстурой
 function OBJModelWithTexture({ objPath, texturePath, scale = 1, position = [0, 0, 0], isNodding, setIsNodding, isShaking, setIsShaking }: { objPath: string; texturePath: string; scale?: number; position?: [number, number, number]; isNodding?: boolean; setIsNodding?: React.Dispatch<React.SetStateAction<boolean>>; isShaking?: boolean; setIsShaking?: React.Dispatch<React.SetStateAction<boolean>> }) {
   const groupRef = useRef<THREE.Group>(null);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const nodState = useRef({ direction: 1, angle: 0, count: 0, target: 2 });
   const shakeState = useRef({ direction: 1, angle: 0, count: 0, target: 2 });
 
@@ -118,7 +117,6 @@ function OBJModelWithTexture({ objPath, texturePath, scale = 1, position = [0, 0
 // Компонент для модели с цветом
 function OBJModel({ objPath, selectedColor, scale = 1, position = [0, 0, 0], isNodding, setIsNodding, isShaking, setIsShaking }: { objPath: string; selectedColor?: string | null; scale?: number; position?: [number, number, number]; isNodding?: boolean; setIsNodding?: React.Dispatch<React.SetStateAction<boolean>>; isShaking?: boolean; setIsShaking?: React.Dispatch<React.SetStateAction<boolean>> }) {
   const groupRef = useRef<THREE.Group>(null);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const nodState = useRef({ direction: 1, angle: 0, count: 0, target: 2 });
   const shakeState = useRef({ direction: 1, angle: 0, count: 0, target: 2 });
 
@@ -176,7 +174,7 @@ function OBJModel({ objPath, selectedColor, scale = 1, position = [0, 0, 0], isN
           setIsNodding && setIsNodding(false);
           nodState.current.angle = 0;
           nodState.current.count = 0;
-          groupRef.current.rotation.x = mousePosition.y * 0.2;
+          groupRef.current.rotation.x = 0;
         }
       } else if (isShaking) {
         const speed = 0.10;
@@ -197,7 +195,7 @@ function OBJModel({ objPath, selectedColor, scale = 1, position = [0, 0, 0], isN
           groupRef.current.rotation.y = 0;
         }
       } else {
-        groupRef.current.rotation.x = mousePosition.y * 0.2;
+        groupRef.current.rotation.x = 0;
         groupRef.current.rotation.y = 0;
       }
     }
