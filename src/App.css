@@ -1,38 +1,235 @@
 .App {
   text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
 }
 
 .App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  background: linear-gradient(45deg, #ffffff, #e0e0e0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.App-header p {
+  margin: 10px 0 0 0;
+  font-size: 1.1rem;
+  opacity: 0.8;
+}
+
+.App-main {
+  flex: 1;
+  display: flex;
+  position: relative;
+}
+
+.viewer-container {
+  flex: 1;
+  position: relative;
+  min-height: calc(100vh - 120px);
+}
+
+.selector-container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+  max-width: 300px;
+  width: 100%;
+}
+
+.animation-controls {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+  max-width: 250px;
+  width: 100%;
+}
+
+.no-model-selected {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
+  height: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  margin: 20px;
+}
+
+.no-model-selected h2 {
+  margin: 0 0 10px 0;
+  font-size: 1.8rem;
+  color: #ffffff;
+}
+
+.no-model-selected p {
+  margin: 0;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.nod-btn {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  z-index: 1001;
+  padding: 14px 28px;
+  font-size: 1.2rem;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #64c8ff 60%, #1e3c72 100%);
   color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  transition: background 0.2s;
+}
+.nod-btn:hover {
+  background: linear-gradient(90deg, #1e3c72 0%, #64c8ff 100%);
 }
 
-.App-link {
-  color: #61dafb;
+.shake-btn {
+  position: fixed;
+  bottom: 32px;
+  right: 180px;
+  z-index: 1001;
+  padding: 14px 28px;
+  font-size: 1.2rem;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #ff6464 60%, #1e3c72 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  transition: background 0.2s;
+}
+.shake-btn:hover {
+  background: linear-gradient(90deg, #1e3c72 0%, #ff6464 100%);
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+.toggle-buttons-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1002;
+  padding: 10px 15px;
+  font-size: 1rem;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #4a90e2 60%, #1e3c72 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  transition: all 0.2s;
+}
+
+.toggle-buttons-btn:hover {
+  background: linear-gradient(90deg, #1e3c72 0%, #4a90e2 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.background-upload-btn {
+  position: fixed;
+  bottom: 32px;
+  left: 350px;
+  z-index: 1001;
+  padding: 14px 28px;
+  font-size: 1.2rem;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #ff9a56 60%, #1e3c72 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  transition: background 0.2s;
+}
+
+.background-upload-btn:hover {
+  background: linear-gradient(90deg, #1e3c72 0%, #ff9a56 100%);
+}
+
+.background-reset-btn {
+  position: fixed;
+  bottom: 32px;
+  left: 550px;
+  z-index: 1001;
+  padding: 14px 28px;
+  font-size: 1.2rem;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #ff6b6b 60%, #1e3c72 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  transition: background 0.2s;
+}
+
+.background-reset-btn:hover {
+  background: linear-gradient(90deg, #1e3c72 0%, #ff6b6b 100%);
+}
+
+/* Адаптивность для планшетов */
+@media (max-width: 1024px) {
+  .App-header h1 {
+    font-size: 2rem;
   }
-  to {
-    transform: rotate(360deg);
+  
+  .selector-container {
+    max-width: 250px;
+  }
+  
+  .animation-controls {
+    max-width: 200px;
+  }
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .App-main {
+    flex-direction: column;
+  }
+  
+  .selector-container {
+    position: relative;
+    top: auto;
+    left: auto;
+    max-width: none;
+    order: 1;
+  }
+  
+  .animation-controls {
+    position: relative;
+    top: auto;
+    right: auto;
+    max-width: none;
+    order: 2;
+  }
+  
+  .viewer-container {
+    order: 3;
+    min-height: 60vh;
+  }
+  
+  .App-header h1 {
+    font-size: 1.8rem;
+  }
+  
+  .App-header p {
+    font-size: 1rem;
   }
 }

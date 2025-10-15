@@ -1,0 +1,11 @@
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="wood" width="64" height="64" patternUnits="userSpaceOnUse">
+      <rect width="64" height="64" fill="#8B4513"/>
+      <line x1="0" y1="32" x2="64" y2="32" stroke="#69340C" stroke-width="2"/>
+      <line x1="0" y1="48" x2="64" y2="48" stroke="#69340C" stroke-width="1"/>
+      <line x1="0" y1="16" x2="64" y2="16" stroke="#6A3B09" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#wood)"/>
+</svg>
