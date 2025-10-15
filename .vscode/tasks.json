@@ -87,26 +87,26 @@
       "dependsOrder": "sequence",
       "dependsOn": "Commit and Push to GitHub"
     },
-    {
-      "label": "Push to Remote",
-      "type": "shell",
-      "command": "git",
-      "args": [
-        "push",
-        "origin",
-        "master"
-      ],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "new"
-      },
-      "problemMatcher": [],
-      "dependsOrder": "sequence",
-      "dependsOn": "Complete Push to GitHub"
-    },
+     {
+       "label": "Full Git Push",
+       "type": "shell",
+       "command": "git",
+       "args": [
+         "push",
+         "origin",
+         "master"
+       ],
+       "group": "build",
+       "presentation": {
+         "echo": true,
+         "reveal": "always",
+         "focus": false,
+         "panel": "new"
+       },
+       "problemMatcher": [],
+       "dependsOrder": "sequence",
+       "dependsOn": "Complete Push to GitHub"
+     },
     {
       "label": "Build for Netlify",
       "type": "npm",
