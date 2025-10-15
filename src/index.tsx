@@ -4,6 +4,11 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
+// Fix for React DevTools semver parsing issue
+if (typeof window !== 'undefined' && (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+  (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE = () => {};
+}
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );

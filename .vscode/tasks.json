@@ -31,12 +31,12 @@
       "problemMatcher": []
     },
     {
-      "label": "Push to GitHub",
+      "label": "Full Git Push",
       "type": "shell",
-      "command": "git",
+      "command": "powershell",
       "args": [
-        "add",
-        "."
+        "-Command",
+        "git add . ; git commit -m \"${input:commitMessage}\" ; git push origin master"
       ],
       "group": "build",
       "presentation": {
@@ -47,66 +47,6 @@
       },
       "problemMatcher": []
     },
-    {
-      "label": "Commit and Push to GitHub",
-      "type": "shell",
-      "command": "git",
-      "args": [
-        "commit",
-        "-m",
-        "${input:commitMessage}"
-      ],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "new"
-      },
-      "problemMatcher": [],
-      "dependsOrder": "sequence",
-      "dependsOn": "Push to GitHub"
-    },
-    {
-      "label": "Complete Push to GitHub",
-      "type": "shell",
-      "command": "git",
-      "args": [
-        "push",
-        "origin",
-        "master"
-      ],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "new"
-      },
-      "problemMatcher": [],
-      "dependsOrder": "sequence",
-      "dependsOn": "Commit and Push to GitHub"
-    },
-     {
-       "label": "Full Git Push",
-       "type": "shell",
-       "command": "git",
-       "args": [
-         "push",
-         "origin",
-         "master"
-       ],
-       "group": "build",
-       "presentation": {
-         "echo": true,
-         "reveal": "always",
-         "focus": false,
-         "panel": "new"
-       },
-       "problemMatcher": [],
-       "dependsOrder": "sequence",
-       "dependsOn": "Complete Push to GitHub"
-     },
     {
       "label": "Build for Netlify",
       "type": "npm",
