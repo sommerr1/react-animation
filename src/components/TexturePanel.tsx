@@ -5,15 +5,32 @@ interface TexturePanelProps {
   setSelectedColor: (color: string | null) => void;
   uploadedTexture: string | null;
   setUploadedTexture: (texture: string | null) => void;
+  glbMaterials?: string[];
+  selectedGlbMaterial?: string | null;
+  setSelectedGlbMaterial?: (material: string | null) => void;
+  modelType?: 'glb' | 'obj';
 }
 
-export default function TexturePanel({ 
+function TexturePanel({ 
   selectedColor, 
   setSelectedColor, 
   uploadedTexture, 
-  setUploadedTexture 
+  setUploadedTexture,
+  glbMaterials = [],
+  selectedGlbMaterial,
+  setSelectedGlbMaterial,
+  modelType
 }: TexturePanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Автоматически выбираем материал, если он один
+  React.useEffect(() => {
+    if (modelType === 'glb' && glbMaterials.length === 1 && !selectedGlbMaterial) {
+      if (setSelectedGlbMaterial) {
+        setSelectedGlbMaterial(glbMaterials[0]);
+      }
+    }
+  }, [glbMaterials, selectedGlbMaterial, modelType, setSelectedGlbMaterial]);
 
   // Предустановленные цвета
   const presetColors = [
@@ -90,8 +107,96 @@ export default function TexturePanel({
       <h3 style={{ margin: '0 0 15px 0', fontSize: '1.2rem' }}>
         🎨 Текстуры
       </h3>
-      
-      {/* Предустановленные цвета */}
+
+      {/* Материалы GLB модели */}
+      {modelType === 'glb' && glbMaterials.length > 0 && (
+        <div style={{ marginBottom: '15px' }}>
+          <div style={{ 
+            fontSize: '0.9rem', 
+            marginBottom: '8px', 
+            color: 'rgba(255,255,255,0.9)',
+            fontWeight: 'bold'
+          }}>
+            Материалы модели:
+          </div>
+          <select
+            value={selectedGlbMaterial || (glbMaterials.length === 1 ? glbMaterials[0] : '')}
+            onChange={(e) => {
+              const selectedValue = e.target.value;
+              if (setSelectedGlbMaterial && selectedValue) {
+                setSelectedGlbMaterial(selectedValue);
+              }
+              // Сбрасываем OBJ текстуры при переключении GLB материалов
+              setSelectedColor(null);
+              setUploadedTexture(null);
+            }}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              fontSize: '0.85rem',
+              borderRadius: '5px',
+              border: '2px solid rgba(255,255,255,0.3)',
+              background: 'rgba(255,255,255,0.1)',
+              color: 'white',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              outline: 'none',
+              appearance: 'none',
+              WebkitAppearance: 'none',
+              MozAppearance: 'none',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 10px center',
+              paddingRight: '35px',
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#4a90e2';
+              e.target.style.boxShadow = '0 0 10px rgba(74, 144, 226, 0.5)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = 'rgba(255,255,255,0.3)';
+              e.target.style.boxShadow = 'none';
+            }}
+          >
+            {!selectedGlbMaterial && glbMaterials.length > 1 && (
+              <option value="" disabled style={{ background: '#2a2a2a', color: 'rgba(255,255,255,0.5)' }}>
+                Выберите материал...
+              </option>
+            )}
+            {glbMaterials.map((materialName, index) => (
+              <option 
+                key={materialName || index} 
+                value={materialName}
+                style={{ background: '#2a2a2a', color: 'white' }}
+              >
+                {materialName || `Материал ${index + 1}`}
+              </option>
+            ))}
+          </select>
+          {glbMaterials.length > 1 && selectedGlbMaterial && (
+            <div style={{ 
+              marginTop: '8px', 
+              fontSize: '0.7rem', 
+              color: 'rgba(255,255,255,0.7)',
+              fontStyle: 'italic'
+            }}>
+              Выбран: <strong>{selectedGlbMaterial}</strong>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Разделитель, если есть и GLB материалы, и OBJ опции */}
+      {modelType === 'glb' && glbMaterials.length > 0 && (
+        <div style={{ 
+          height: '1px', 
+          background: 'rgba(255,255,255,0.2)', 
+          margin: '15px 0' 
+        }} />
+      )}
+
+      {/* Предустановленные цвета (только для OBJ) */}
+      {modelType === 'obj' && (
       <div style={{ marginBottom: '15px' }}>
         <div 
           className="color-scroll"
@@ -162,8 +267,10 @@ export default function TexturePanel({
           Прокрутите для выбора цвета
         </div>
       </div>
+      )}
 
-      {/* Загрузка пользовательской текстуры */}
+      {/* Загрузка пользовательской текстуры (только для OBJ) */}
+      {modelType === 'obj' && (
       <div style={{ marginBottom: '15px' }}>
         <button
           onClick={handleTextureUpload}
@@ -182,6 +289,21 @@ export default function TexturePanel({
           📁 Загрузить свою
         </button>
       </div>
+      )}
+      
+      {/* Сообщение, если это GLB без материалов */}
+      {modelType === 'glb' && glbMaterials.length === 0 && (
+        <div style={{ 
+          padding: '10px', 
+          background: 'rgba(255,255,255,0.1)', 
+          borderRadius: '5px',
+          fontSize: '0.85rem',
+          color: 'rgba(255,255,255,0.7)',
+          textAlign: 'center'
+        }}>
+          Загрузка материалов...
+        </div>
+      )}
 
       {/* Скрытый input для загрузки файлов */}
       <input
@@ -194,3 +316,5 @@ export default function TexturePanel({
     </div>
   );
 }
+
+export default TexturePanel;

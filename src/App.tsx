@@ -2,10 +2,11 @@ import React from 'react';
 import { Provider } from 'react-redux';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { store } from './store/store';
-import ModelViewer from './components/ModelViewer';
+import ModelViewer, { MaterialGroup } from './components/ModelViewer';
 import OBJViewer from './components/OBJViewer';
 import ModelSelector from './components/ModelSelector';
 import TexturePanel from './components/TexturePanel';
+import MaterialGroupPanel from './components/MaterialGroupPanel';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from './store/store';
 import { setSelectedModel } from './store/modelSlice';
@@ -19,10 +20,44 @@ function AppContent() {
   const { showButtons } = useUI();
   const [selectedColor, setSelectedColor] = React.useState<string | null>(null);
   const [uploadedTexture, setUploadedTexture] = React.useState<string | null>(null);
+  const [glbMaterials, setGlbMaterials] = React.useState<string[]>([]);
+  const [selectedGlbMaterial, setSelectedGlbMaterial] = React.useState<string | null>(null);
+  const [materialGroups, setMaterialGroups] = React.useState<MaterialGroup[]>([]);
+  const [selectedMaterialGroups, setSelectedMaterialGroups] = React.useState<Map<string, string | null>>(new Map());
 
   const handleModelSelect = (modelId: string) => {
     dispatch(setSelectedModel(modelId));
+    // Сбрасываем выбор материалов при смене модели
+    setSelectedGlbMaterial(null);
+    setGlbMaterials([]);
+    setSelectedColor(null);
+    setUploadedTexture(null);
+    setMaterialGroups([]);
+    setSelectedMaterialGroups(new Map());
   };
+
+  const handleMaterialGroupsFound = React.useCallback((groups: MaterialGroup[]) => {
+    setMaterialGroups(groups);
+    
+    // Собираем все уникальные материалы из групп
+    const allMaterialsSet = new Set<string>();
+    groups.forEach(group => {
+      group.materialSet.forEach(mat => allMaterialsSet.add(mat));
+    });
+    setGlbMaterials(Array.from(allMaterialsSet).sort());
+    
+    // Сбрасываем выбор материалов при изменении групп
+    setSelectedMaterialGroups(new Map());
+  }, []);
+  
+  const handleMaterialSelect = React.useCallback((groupId: string, materialName: string | null) => {
+    setSelectedMaterialGroups(prev => {
+      const newMap = new Map(prev);
+      newMap.set(groupId, materialName);
+      return newMap;
+    });
+  }, []);
+
 
   const selectedModelData = models.find(model => model.id === selectedModel);
 
@@ -50,6 +85,8 @@ function AppContent() {
                 modelPath={selectedModelData.path}
                 scale={1}
                 position={[0, 0, 0]}
+                selectedMaterialGroups={selectedMaterialGroups}
+                onMaterialGroupsFound={handleMaterialGroupsFound}
               />
             )
           ) : (
@@ -74,12 +111,25 @@ function AppContent() {
               selectedModel={selectedModel}
               onModelSelect={handleModelSelect}
             />
-            <TexturePanel
-              selectedColor={selectedColor}
-              setSelectedColor={setSelectedColor}
-              uploadedTexture={uploadedTexture}
-              setUploadedTexture={setUploadedTexture}
-            />
+            {selectedModelData?.type === 'glb' ? (
+              <MaterialGroupPanel
+                groups={materialGroups}
+                selectedMaterials={selectedMaterialGroups}
+                onMaterialSelect={handleMaterialSelect}
+                allMaterials={glbMaterials}
+              />
+            ) : (
+              <TexturePanel
+                selectedColor={selectedColor}
+                setSelectedColor={setSelectedColor}
+                uploadedTexture={uploadedTexture}
+                setUploadedTexture={setUploadedTexture}
+                glbMaterials={[]}
+                selectedGlbMaterial={null}
+                setSelectedGlbMaterial={() => {}}
+                modelType={selectedModelData?.type}
+              />
+            )}
           </div>
         )}
       </main>

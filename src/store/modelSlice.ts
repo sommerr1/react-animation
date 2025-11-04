@@ -10,12 +10,23 @@ export interface ModelInfo {
   thumbnail?: string;
 }
 
+export interface ModelStatistics {
+  materials: number;
+  vertices: number;
+  faces: number;
+  meshes: number;
+  textures: number;
+  animations: number;
+  bones: number;
+}
+
 interface ModelState {
   selectedModel: string;
   models: ModelInfo[];
   isLoading: boolean;
   error: string | null;
   selectedTexture: string | null;
+  statistics: ModelStatistics | null;
 }
 
 const initialState: ModelState = {
@@ -46,7 +57,7 @@ const initialState: ModelState = {
 	{
       id: 'mark_23',
       name: 'Mark_23',
-      path: '/models/mark_23__animated_free.glb',
+      path: '/models/test04.glb',
       description: 'Пистолет',
       type: 'glb'
     },
@@ -147,7 +158,8 @@ const initialState: ModelState = {
   ],
   isLoading: false,
   error: null,
-  selectedTexture: null
+  selectedTexture: null,
+  statistics: null
 };
 
 const modelSlice = createSlice({
@@ -171,6 +183,9 @@ const modelSlice = createSlice({
     },
     setSelectedTexture: (state, action: PayloadAction<string | null>) => {
       state.selectedTexture = action.payload;
+    },
+    setStatistics: (state, action: PayloadAction<ModelStatistics | null>) => {
+      state.statistics = action.payload;
     }
   }
 });
@@ -181,7 +196,8 @@ export const {
   addModel, 
   setLoading, 
   setError,
-  setSelectedTexture
+  setSelectedTexture,
+  setStatistics
 } = modelSlice.actions;
 
 export default modelSlice.reducer; 

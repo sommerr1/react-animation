@@ -1,0 +1,780 @@
+import React, { Suspense, useRef, useState, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, Environment, useGLTF, useAnimations } from '@react-three/drei';
+import * as THREE from 'three';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '../store/store';
+import { setStatistics } from '../store/modelSlice';
+import { calculateModelStatistics } from '../utils/modelStatistics';
+import AnimationControls from './AnimationControls';
+import ModelStatisticsDisplay from './ModelStatistics';
+import { useAnimation } from '../contexts/AnimationContext';
+import { useUI } from '../contexts/UIContext';
+
+interface ModelViewerProps {
+  modelPath: string;
+  scale?: number;
+  position?: [number, number, number];
+  isNodding?: boolean;
+  setIsNodding?: React.Dispatch<React.SetStateAction<boolean>>;
+  selectedMaterialName?: string | null;
+  onMaterialsFound?: (materials: string[]) => void;
+}
+
+function Model({ modelPath, scale = 1, position = [0, 0, 0], isNodding, setIsNodding, isShaking, setIsShaking, selectedMaterialName, onMaterialsFound }: ModelViewerProps & { isShaking?: boolean; setIsShaking?: React.Dispatch<React.SetStateAction<boolean>>; selectedMaterialName?: string | null; onMaterialsFound?: (materials: string[]) => void }) {
+  const { scene, animations, materials: gltfMaterials } = useGLTF(modelPath);
+  const groupRef = useRef<THREE.Group>(null);
+  const { actions, names } = useAnimations(animations, groupRef);
+  const { setAnimations, setCurrentAnimation, currentAnimation, isPlaying, mousePosition } = useAnimation();
+  const dispatch = useDispatch();
+  const { invalidate } = useThree(); // Для принудительного обновления рендера
+  const nodState = useRef({ direction: 1, angle: 0, count: 0, target: 2 }); // target: сколько кивков сделать
+  const shakeState = useRef({ direction: 1, angle: 0, count: 0, target: 2 });
+  const materialsRef = useRef<Map<string, THREE.Material>>(new Map());
+  const originalMaterialsRef = useRef<Map<THREE.Mesh, THREE.Material | THREE.Material[]>>(new Map());
+  // Храним список материалов, которые изначально были назначены каждому мешу
+  const meshMaterialsMap = useRef<Map<THREE.Mesh, Set<string>>>(new Map());
+
+  // Собираем все материалы из сцены при загрузке
+  useEffect(() => {
+    if (scene) {
+      materialsRef.current.clear();
+      originalMaterialsRef.current.clear();
+      const materialNames: string[] = [];
+      const allMaterials = new Set<string>();
+      
+      console.log('[ModelViewer] Начинаем сбор материалов из сцены...');
+      
+      // Сначала собираем материалы из GLTF напрямую (официальный список из файла)
+      // Это основной источник материалов, так как он содержит все материалы из GLB файла
+      if (gltfMaterials && Array.isArray(gltfMaterials)) {
+        console.log(`[ModelViewer] GLTF материалы из useGLTF: ${gltfMaterials.length} штук`);
+        gltfMaterials.forEach((mat, idx) => {
+          // ВАЖНО: Используем только материалы с реальными именами
+          // Материалы без имени или с дефолтными именами пропускаем
+          const materialName = mat.name;
+          
+          // Фильтруем материалы без имени или с дефолтными именами
+          if (!materialName || materialName.trim() === '') {
+            console.log(`[ModelViewer] ⊘ GLTF Материал [${idx}] пропущен (нет имени): type="${mat.type}"`);
+            return;
+          }
+          
+          // Фильтруем дефолтные имена (Material_0, Material_1, Материал 1, Material 2, etc.)
+          const defaultNamePatterns = [
+            /^Material_\d+$/i,           // Material_0, Material_1, etc.
+            /^Материал\s*\d+$/i,         // Материал 1, Материал 2, etc.
+            /^Material\s*\d+$/i,         // Material 1, Material 2, etc.
+            /^GLTF_Material_\d+$/i,      // GLTF_Material_0, etc.
+            /^Material$/i,                // Просто "Material"
+            /^Материал$/i                 // Просто "Материал"
+          ];
+          
+          const isDefaultName = defaultNamePatterns.some(pattern => pattern.test(materialName));
+          if (isDefaultName) {
+            console.log(`[ModelViewer] ⊘ GLTF Материал [${idx}] пропущен (дефолтное имя): "${materialName}"`);
+            return;
+          }
+          
+          console.log(`[ModelViewer] GLTF Материал [${idx}]: name="${materialName}", type="${mat.type}"`);
+          
+          if (!materialsRef.current.has(materialName)) {
+            materialsRef.current.set(materialName, mat);
+            // Добавляем в allMaterials сразу, чтобы избежать дубликатов при обходе сцены
+            allMaterials.add(materialName);
+            if (!materialName.startsWith('__SINGLE__')) {
+              materialNames.push(materialName);
+              console.log(`[ModelViewer] ✓ GLTF Материал добавлен: "${materialName}"`);
+            } else {
+              console.log(`[ModelViewer] ⊘ GLTF Материал пропущен (single): "${materialName}"`);
+            }
+          }
+        });
+      } else if (gltfMaterials) {
+        console.log(`[ModelViewer] GLTF материалы (не массив):`, gltfMaterials);
+        // Если это объект, итерируем по нему
+        Object.entries(gltfMaterials).forEach(([key, mat]) => {
+          const material = mat as THREE.Material;
+          const materialName = material.name;
+          
+          // Фильтруем материалы без имени или с дефолтными именами
+          if (!materialName || materialName.trim() === '') {
+            console.log(`[ModelViewer] ⊘ GLTF Материал "${key}" пропущен (нет имени): type="${material.type}"`);
+            return;
+          }
+          
+          // Фильтруем дефолтные имена
+          const defaultNamePatterns = [
+            /^Material_\d+$/i,
+            /^Материал\s*\d+$/i,
+            /^Material\s*\d+$/i,
+            /^GLTF_Material_\d+$/i,
+            /^Material$/i,
+            /^Материал$/i
+          ];
+          
+          const isDefaultName = defaultNamePatterns.some(pattern => pattern.test(materialName));
+          if (isDefaultName) {
+            console.log(`[ModelViewer] ⊘ GLTF Материал "${key}" пропущен (дефолтное имя): "${materialName}"`);
+            return;
+          }
+          
+          console.log(`[ModelViewer] GLTF Материал "${key}": name="${materialName}", type="${material.type}"`);
+          
+          if (!materialsRef.current.has(materialName)) {
+            materialsRef.current.set(materialName, material);
+            // Добавляем в allMaterials сразу, чтобы избежать дубликатов при обходе сцены
+            allMaterials.add(materialName);
+            if (!materialName.startsWith('__SINGLE__')) {
+              materialNames.push(materialName);
+              console.log(`[ModelViewer] ✓ GLTF Материал добавлен: "${materialName}"`);
+            } else {
+              console.log(`[ModelViewer] ⊘ GLTF Материал пропущен (single): "${materialName}"`);
+            }
+          }
+        });
+      }
+      
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          console.log(`[ModelViewer] Найден меш: ${child.name || 'unnamed'}`);
+          
+          if (child.material) {
+            // Сохраняем оригинальные материалы как глубокие копии
+            const origMat = child.material;
+            if (Array.isArray(origMat)) {
+              originalMaterialsRef.current.set(child, origMat.map(m => m.clone()));
+            } else {
+              originalMaterialsRef.current.set(child, origMat.clone());
+            }
+            
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            console.log(`[ModelViewer] Меш имеет ${materials.length} материал(ов)`);
+            
+            // Создаем Set материалов для этого меша
+            const meshMaterialNames = new Set<string>();
+            
+            materials.forEach((mat, index) => {
+              // Получаем имя материала или создаем временное для логирования
+              let materialName = mat.name || `Material_${index}`;
+              let hasRealName = !!mat.name; // Проверяем, есть ли реальное имя
+              
+              // ВАЖНО: Если материал не имеет имени, но был создан с именем при загрузке,
+              // попытаемся восстановить имя из gltfMaterials, сравнивая ссылки на объекты
+              if (!hasRealName && gltfMaterials) {
+                const gltfMaterialsArray = Array.isArray(gltfMaterials) 
+                  ? gltfMaterials 
+                  : Object.values(gltfMaterials) as THREE.Material[];
+                
+                // Ищем материал в gltfMaterials по ссылке на объект (тот же экземпляр)
+                const matchingGltfMaterial = gltfMaterialsArray.find((gltfMat: THREE.Material) => gltfMat === mat);
+                
+                if (matchingGltfMaterial && matchingGltfMaterial.name && matchingGltfMaterial.name.trim() !== '') {
+                  // Восстанавливаем имя материала из gltfMaterials
+                  mat.name = matchingGltfMaterial.name;
+                  materialName = matchingGltfMaterial.name;
+                  hasRealName = true;
+                  console.log(`[ModelViewer] ✓ Восстановлено имя материала: "${materialName}" (из gltfMaterials)`);
+                }
+              }
+              
+              console.log(`[ModelViewer] Материал [${index}]: name="${materialName}", hasRealName=${hasRealName}, type="${mat.type}"`);
+              
+              // Добавляем имя материала в список материалов этого меша (для внутреннего использования)
+              if (hasRealName) {
+                meshMaterialNames.add(materialName);
+              } else {
+                // Для материалов без имени используем индекс материала для отслеживания
+                meshMaterialNames.add(`__INDEX_${index}__`);
+              }
+              
+              // ВАЖНО: Используем только материалы, которые уже есть в gltfMaterials
+              // Материалы без имени (или с дефолтными именами) игнорируем для списка выбора
+              // Это предотвращает появление материалов типа "Material_0", "Material_1" и т.д.
+              
+              if (!hasRealName) {
+                // Материал без имени - не добавляем в список для выбора
+                // Но сохраняем его в реф для внутреннего использования
+                const tempName = `__TEMP_MATERIAL_${index}__`;
+                if (!materialsRef.current.has(tempName)) {
+                  materialsRef.current.set(tempName, mat);
+                }
+                console.log(`[ModelViewer] ⊘ Материал без имени пропущен для списка выбора: index=${index}`);
+              } else {
+                // Материал с реальным именем
+                if (materialsRef.current.has(materialName)) {
+                  // Материал уже был добавлен из gltfMaterials - это нормально
+                  console.log(`[ModelViewer] ⊘ Материал из меша уже существует (из gltfMaterials): "${materialName}"`);
+                } else {
+                  // Материал с реальным именем, но не найден в gltfMaterials
+                  // Это может быть материал, созданный динамически или не экспортированный
+                  // Добавляем его в реф, но НЕ в список для выбора (полагаемся только на gltfMaterials)
+                  materialsRef.current.set(materialName, mat);
+                  console.log(`[ModelViewer] ⊘ Материал "${materialName}" найден в меше, но отсутствует в gltfMaterials - не добавляем в список выбора`);
+                  
+                  // Если это не single материал и нужно добавить в список, раскомментируйте ниже
+                  // Но лучше полагаться только на gltfMaterials
+                  /*
+                  if (!materialName.startsWith('__SINGLE__') && !allMaterials.has(materialName)) {
+                    materialNames.push(materialName);
+                    allMaterials.add(materialName);
+                    console.log(`[ModelViewer] ✓ Материал из меша добавлен в список: "${materialName}"`);
+                  }
+                  */
+                }
+              }
+            });
+            
+            // Сохраняем список материалов для этого меша
+            meshMaterialsMap.current.set(child, meshMaterialNames);
+            const savedMaterialsStr = Array.from(meshMaterialNames).join(', ') || 'нет материалов';
+            console.log(`[ModelViewer] Сохранены материалы для меша "${child.name || 'unnamed'}": [${savedMaterialsStr}]`);
+            
+            // Проверяем соответствие сохраненных материалов и материалов из gltfMaterials
+            const gltfMatNames = gltfMaterials ? (Array.isArray(gltfMaterials) 
+              ? gltfMaterials.map(m => m.name).filter(Boolean)
+              : Object.values(gltfMaterials).map((m: any) => m.name).filter(Boolean)
+            ) : [];
+            const matchingMats = Array.from(meshMaterialNames).filter(name => gltfMatNames.includes(name));
+            if (matchingMats.length !== meshMaterialNames.size) {
+              console.log(`[ModelViewer] ⚠ Внимание: не все материалы меша найдены в gltfMaterials. Сохранено: [${savedMaterialsStr}], в GLTF: [${gltfMatNames.join(', ')}]`);
+            }
+            
+            // Также проверяем geometry.groups - там могут быть дополнительные материалы
+            if (child.geometry && child.geometry.groups) {
+              console.log(`[ModelViewer] Меш имеет ${child.geometry.groups.length} groups`);
+              child.geometry.groups.forEach((group: { start: number; count: number; materialIndex?: number }, idx: number) => {
+                console.log(`[ModelViewer] Group [${idx}]: materialIndex=${group.materialIndex}, start=${group.start}, count=${group.count}`);
+              });
+            }
+          } else {
+            console.log(`[ModelViewer] ⚠ Меш не имеет материала`);
+            // Сохраняем пустой Set для мешей без материалов
+            meshMaterialsMap.current.set(child, new Set<string>());
+          }
+        }
+      });
+      
+      // Убираем дубликаты и сортируем
+      const uniqueNames = Array.from(new Set(materialNames)).sort();
+      console.log(`[ModelViewer] Итого найдено уникальных материалов: ${uniqueNames.length}`, uniqueNames);
+      
+      // Уведомляем родительский компонент о найденных материалах
+      // Вызываем даже если материалов нет (для очистки состояния)
+      if (onMaterialsFound) {
+        onMaterialsFound(uniqueNames);
+      }
+    }
+  }, [scene, onMaterialsFound]);
+
+  // Переключение материала по имени
+  useEffect(() => {
+    if (!scene) return;
+    
+    console.log(`[ModelViewer] 🔄 Начало применения материала: "${selectedMaterialName || 'нет'}"`);
+    console.log(`[ModelViewer] Доступные материалы: ${Array.from(materialsRef.current.keys()).join(', ')}`);
+    
+    // Применяем изменения к материалам
+    let appliedCount = 0;
+    let skippedCount = 0;
+    
+    scene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const originalMaterial = originalMaterialsRef.current.get(child);
+        // meshMaterialNames используется в закомментированном коде ниже для версии с проверкой исходных материалов
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const meshMaterialNames = meshMaterialsMap.current.get(child);
+        
+        // Пропускаем меши без сохраненного оригинального материала
+        if (!originalMaterial) {
+          console.log(`[ModelViewer] ⚠ Меш "${child.name || 'unnamed'}" пропущен - нет оригинального материала`);
+          return;
+        }
+        
+        if (selectedMaterialName && materialsRef.current.has(selectedMaterialName)) {
+          const targetMaterial = materialsRef.current.get(selectedMaterialName)!;
+          
+          // ============================================================================
+          // ВЕРСИЯ ДЛЯ ДИВАНА: Применяем материал ко ВСЕМ мешам модели
+          // ============================================================================
+          // ВАЖНО: Эта версия применяет выбранный материал ко всем мешам модели,
+          // независимо от того, есть ли этот материал в исходном списке материалов меша.
+          // Это нужно для дивана, где материал должен применяться ко всей модели целиком.
+          // 
+          // Если нужно вернуться к версии, где материал применяется только к мешам,
+          // у которых он был изначально, нужно раскомментировать проверку ниже.
+          // ============================================================================
+          
+          // Проверяем текущий материал меша (до применения)
+          const currentMat = Array.isArray(child.material) ? child.material[0] : child.material;
+          const currentMatName = (currentMat as THREE.Material)?.name || '';
+          const hasMaterialCurrently = currentMatName === selectedMaterialName;
+          
+          // Если материал уже применен к мешу, пропускаем (не нужно обновлять без необходимости)
+          if (hasMaterialCurrently) {
+            console.log(`[ModelViewer] ℹ Меш "${child.name || 'unnamed'}" уже имеет материал "${selectedMaterialName}" - пропускаем`);
+            return;
+          }
+          
+          // ============================================================================
+          // ЗАКОММЕНТИРОВАННАЯ ПРОВЕРКА: Применение только к мешам с исходным материалом
+          // ============================================================================
+          // Раскомментируйте код ниже, если нужно применять материал ТОЛЬКО к мешам,
+          // у которых этот материал был в исходном списке:
+          //
+          // const hasMaterialInOriginalList = meshMaterialNames ? meshMaterialNames.has(selectedMaterialName) : false;
+          // if (!hasMaterialInOriginalList) {
+          //   skippedCount++;
+          //   console.log(`[ModelViewer] ⊘ Меш "${child.name || 'unnamed'}" пропущен - нет материала "${selectedMaterialName}" в исходном списке`);
+          //   return;
+          // }
+          // ============================================================================
+          
+          console.log(`[ModelViewer] ✓ Применяем материал "${selectedMaterialName}" ко всему мешу "${child.name || 'unnamed'}"`);
+          
+          // Функция для глубокого клонирования материала со всеми текстурами
+          const cloneMaterialDeep = (mat: THREE.Material): THREE.Material => {
+            const cloned = mat.clone();
+            cloned.name = selectedMaterialName;
+            cloned.needsUpdate = true;
+            
+            // Проверяем, что материал имеет свойства текстур (MeshStandardMaterial, MeshPhongMaterial и т.д.)
+            const sourceMat = mat as any;
+            const targetMat = cloned as any;
+            
+            // Клонируем все текстуры материала с правильной типизацией
+            if (sourceMat.map instanceof THREE.Texture) {
+              targetMat.map = sourceMat.map.clone();
+              if (targetMat.map) {
+                targetMat.map.needsUpdate = true;
+                targetMat.map.updateMatrix();
+              }
+            }
+            if (sourceMat.normalMap instanceof THREE.Texture) {
+              targetMat.normalMap = sourceMat.normalMap.clone();
+              if (targetMat.normalMap) {
+                targetMat.normalMap.needsUpdate = true;
+              }
+            }
+            if (sourceMat.roughnessMap instanceof THREE.Texture) {
+              targetMat.roughnessMap = sourceMat.roughnessMap.clone();
+              if (targetMat.roughnessMap) {
+                targetMat.roughnessMap.needsUpdate = true;
+              }
+            }
+            if (sourceMat.metalnessMap instanceof THREE.Texture) {
+              targetMat.metalnessMap = sourceMat.metalnessMap.clone();
+              if (targetMat.metalnessMap) {
+                targetMat.metalnessMap.needsUpdate = true;
+              }
+            }
+            if (sourceMat.aoMap instanceof THREE.Texture) {
+              targetMat.aoMap = sourceMat.aoMap.clone();
+              if (targetMat.aoMap) {
+                targetMat.aoMap.needsUpdate = true;
+              }
+            }
+            if (sourceMat.emissiveMap instanceof THREE.Texture) {
+              targetMat.emissiveMap = sourceMat.emissiveMap.clone();
+              if (targetMat.emissiveMap) {
+                targetMat.emissiveMap.needsUpdate = true;
+              }
+            }
+            
+            return cloned;
+          };
+          
+          // Применяем материал к этому мешу
+          const clonedMaterial = cloneMaterialDeep(targetMaterial);
+          
+          // Определяем, был ли оригинальный материал массивом (multipl-объект)
+          const wasMultipl = Array.isArray(originalMaterial);
+          
+          if (wasMultipl) {
+            // Для multipl-объектов: заменяем ВСЕ материалы на выбранный
+            child.material = clonedMaterial;
+            
+            // КРИТИЧЕСКИ ВАЖНО: Обновляем materialIndex для ВСЕХ граней геометрии
+            if (child.geometry && child.geometry.attributes) {
+              // Если у геометрии есть groups, обновляем materialIndex для всех граней
+              if (child.geometry.groups && child.geometry.groups.length > 0) {
+                // Обновляем все groups, чтобы они указывали на материал с индексом 0
+                child.geometry.groups.forEach((group: { start: number; count: number; materialIndex?: number }) => {
+                  group.materialIndex = 0;
+                });
+                console.log(`[ModelViewer] Обновлено ${child.geometry.groups.length} групп геометрии для объекта "${child.name || 'unnamed'}"`);
+              }
+              
+              // Помечаем геометрию для обновления
+              child.geometry.needsUpdate = true;
+            }
+          } else {
+            // Один материал (single-объект) - просто заменяем
+            child.material = clonedMaterial;
+          }
+          
+          console.log(`[ModelViewer] ✓ Материал "${selectedMaterialName}" применен к мешу "${child.name || 'unnamed'}", тип материала: ${child.material instanceof THREE.Material ? (child.material as any).type : 'unknown'}`);
+          
+          appliedCount++;
+          
+          // Принудительно помечаем для обновления
+          if (child.geometry) {
+            child.geometry.needsUpdate = true;
+            
+            // Принудительно пересчитываем геометрию для обновления отображения
+            if (child.geometry.computeBoundingBox) {
+              child.geometry.computeBoundingBox();
+            }
+            if (child.geometry.computeBoundingSphere) {
+              child.geometry.computeBoundingSphere();
+            }
+          }
+          
+          // Обновляем материал и все его текстуры более агрессивно
+          const updateMaterialTextures = (mat: THREE.Material) => {
+            if (!mat) return;
+            
+            mat.needsUpdate = true;
+            const matAny = mat as any;
+            
+            // Обновляем все возможные текстуры материала
+            const textureProps = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'bumpMap', 'displacementMap', 'alphaMap', 'lightMap', 'envMap'];
+            
+            textureProps.forEach(prop => {
+              if (matAny[prop] && matAny[prop] instanceof THREE.Texture) {
+                const texture = matAny[prop] as THREE.Texture;
+                texture.needsUpdate = true;
+                texture.updateMatrix();
+              }
+            });
+          };
+          
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(updateMaterialTextures);
+            } else {
+              updateMaterialTextures(child.material);
+            }
+          }
+          
+          // Принудительно обновляем матрицу меша
+          child.updateMatrix();
+          child.updateMatrixWorld(true);
+          
+          // Помечаем меш для обновления
+          child.visible = false;
+          child.visible = true;
+          
+        } else if (!selectedMaterialName) {
+          // Восстанавливаем оригинальный материал
+          if (Array.isArray(originalMaterial)) {
+            child.material = originalMaterial.map(m => m.clone());
+          } else {
+            child.material = (originalMaterial as THREE.Material).clone();
+          }
+        }
+      }
+    });
+    
+    if (selectedMaterialName) {
+      console.log(`[ModelViewer] ✅ Итого: применено к ${appliedCount} мешам, пропущено ${skippedCount} мешей`);
+      if (appliedCount === 0) {
+        console.log(`[ModelViewer] ⚠ Материал "${selectedMaterialName}" не был применен ни к одному мешу. Проверьте, что материал присутствует в мешах.`);
+      } else {
+        // Принудительно обновляем рендер после применения материалов
+        invalidate();
+        console.log(`[ModelViewer] 🔄 Рендер обновлен после применения материалов`);
+      }
+    }
+  }, [scene, selectedMaterialName, invalidate]);
+
+  // Вычисляем статистику модели после загрузки
+  useEffect(() => {
+    if (scene) {
+      // calculateModelStatistics принимает THREE.Object3D (Group или Scene)
+      const stats = calculateModelStatistics(scene, animations);
+      dispatch(setStatistics(stats));
+    }
+    // Очищаем статистику при размонтировании
+    return () => {
+      dispatch(setStatistics(null));
+    };
+  }, [scene, animations, dispatch]);
+
+  // Обновляем список анимаций в контексте
+  React.useEffect(() => {
+    setAnimations(names);
+  }, [names, setAnimations]);
+
+  // Автоматически запускаем первую анимацию, если она есть
+  React.useEffect(() => {
+    if (names.length > 0 && !currentAnimation) {
+      const firstAnimation = names[0];
+      const action = actions[firstAnimation];
+      if (action) {
+        action.play();
+        setCurrentAnimation(firstAnimation);
+      }
+    }
+  }, [actions, names, currentAnimation, setCurrentAnimation]);
+
+  // Обработка изменения анимации
+  React.useEffect(() => {
+    if (currentAnimation && actions[currentAnimation]) {
+      // Останавливаем все анимации
+      Object.values(actions).forEach(action => {
+        if (action) {
+          action.stop();
+        }
+      });
+      
+      // Запускаем выбранную анимацию
+      const action = actions[currentAnimation];
+      if (action) {
+        action.play();
+      }
+    }
+  }, [currentAnimation, actions]);
+
+  // Обработка паузы/воспроизведения
+  React.useEffect(() => {
+    if (currentAnimation && actions[currentAnimation]) {
+      const action = actions[currentAnimation];
+      if (action) {
+        action.paused = !isPlaying;
+      }
+    }
+  }, [isPlaying, currentAnimation, actions]);
+
+  // Плавное движение модели за мышкой
+  useFrame((state) => {
+    if (groupRef.current) {
+      // Плавная интерполяция позиции
+      if (isNodding) {
+        const speed = 0.08;
+        nodState.current.angle += speed * nodState.current.direction;
+        groupRef.current.rotation.x = Math.sin(nodState.current.angle) * 0.5;
+        if (nodState.current.angle > Math.PI / 2) {
+          nodState.current.direction = -1;
+          nodState.current.count++;
+        }
+        if (nodState.current.angle < 0) {
+          nodState.current.direction = 1;
+          nodState.current.count++;
+        }
+        // Двойной кивок (две пары вниз-вверх)
+        if (nodState.current.count >= nodState.current.target * 2) {
+          setIsNodding && setIsNodding(false);
+          nodState.current.angle = 0;
+          nodState.current.count = 0;
+          groupRef.current.rotation.x = mousePosition.y * 0.2;
+        }
+      } else if (isShaking) {
+        const speed = 0.10;
+        shakeState.current.angle += speed * shakeState.current.direction;
+        groupRef.current.rotation.y = Math.sin(shakeState.current.angle) * 0.7;
+        if (shakeState.current.angle > Math.PI / 3) {
+          shakeState.current.direction = -1;
+          shakeState.current.count++;
+        }
+        if (shakeState.current.angle < -Math.PI / 3) {
+          shakeState.current.direction = 1;
+          shakeState.current.count++;
+        }
+        // Двойное "нет" (влево-вправо)
+        if (shakeState.current.count >= shakeState.current.target * 2) {
+          setIsShaking && setIsShaking(false);
+          shakeState.current.angle = 0;
+          shakeState.current.count = 0;
+          groupRef.current.rotation.y = 0;
+        }
+      } else {
+        groupRef.current.rotation.x = mousePosition.y * 0.2;
+        groupRef.current.rotation.y = 0;
+      }
+    }
+  });
+
+  return (
+    <group ref={groupRef} scale={scale} position={position}>
+      <primitive object={scene} />
+    </group>
+  );
+}
+
+export default function ModelViewer({ modelPath, scale = 1, position = [0, 0, 0], selectedMaterialName, onMaterialsFound }: ModelViewerProps) {
+  const { animations, currentAnimation, isPlaying, handleAnimationChange, handlePlayPause } = useAnimation();
+  const { showButtons, toggleButtons, backgroundImage, setBackgroundImage } = useUI();
+  const [isNodding, setIsNodding] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const statistics = useSelector((state: RootState) => state.model.statistics);
+  const models = useSelector((state: RootState) => state.model.models);
+  const selectedModel = useSelector((state: RootState) => state.model.selectedModel);
+  const selectedModelData = models.find(model => model.id === selectedModel);
+
+  // Функция для запуска кивка
+  const handleNod = () => {
+    setIsNodding(true);
+  };
+
+  // Функция для запуска "нет"
+  const handleShake = () => {
+    setIsShaking(true);
+  };
+
+
+  // Функция для загрузки фонового изображения
+  const handleBackgroundUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+
+  // Обработка выбора файла
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setBackgroundImage(result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+
+
+  return (
+    <div style={{ width: '100%', height: '100vh', position: 'relative' }}>
+      <Canvas
+        camera={{ position: [0, 0, 5], fov: 75 }}
+        style={{ 
+          backgroundColor: '#000000',
+          backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed'
+        }}
+      >
+        <ambientLight intensity={0.5} />
+        <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
+        <pointLight position={[-10, -10, -5]} intensity={0.5} />
+        
+        <Suspense fallback={null}>
+          <Model 
+            modelPath={modelPath} 
+            scale={scale} 
+            position={position} 
+            isNodding={isNodding} 
+            setIsNodding={setIsNodding} 
+            isShaking={isShaking} 
+            setIsShaking={setIsShaking}
+            selectedMaterialName={selectedMaterialName}
+            onMaterialsFound={onMaterialsFound}
+          />
+        </Suspense>
+        
+        <OrbitControls 
+          enablePan={true}
+          enableZoom={true}
+          enableRotate={true}
+        />
+        
+        <Environment preset="sunset" />
+      </Canvas>
+      
+      {/* Скрытый input для выбора файла */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
+      
+      {/* Кнопка для скрытия/показа всех кнопок */}
+      <button
+        className="toggle-buttons-btn"
+        style={{
+          position: 'fixed',
+          top: 20,
+          right: 20,
+          zIndex: 1002,
+          padding: '10px 15px',
+          fontSize: '1rem',
+          borderRadius: '8px',
+          background: 'linear-gradient(90deg, #4a90e2 60%, #1e3c72 100%)',
+          color: 'white',
+          border: 'none',
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          transition: 'all 0.2s',
+        }}
+        onClick={toggleButtons}
+      >
+        {showButtons ? '👁️ Скрыть управление' : '👁️‍🗨️ Показать управление'}
+      </button>
+
+      {/* Компонент статистики модели */}
+      <ModelStatisticsDisplay 
+        statistics={statistics} 
+        modelName={selectedModelData?.name}
+      />
+
+      {/* Все остальные кнопки */}
+      {showButtons && (
+        <>
+          <button
+            className="nod-btn"
+            onClick={handleNod}
+          >
+            🤖 Кивок
+          </button>
+          <button
+            className="shake-btn"
+            onClick={handleShake}
+          >
+            🙅‍♂️ Нет
+          </button>
+          
+          {/* Кнопка загрузки фона */}
+          <button
+            className="background-upload-btn"
+            style={{
+              position: 'fixed',
+              bottom: 32,
+              left: 350,
+              zIndex: 1001,
+              padding: '14px 4px',
+              fontSize: '1.2rem',
+              borderRadius: '10px',
+              background: 'linear-gradient(90deg, #ff9a56 60%, #1e3c72 100%)',
+              color: 'white',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+              transition: 'background 0.2s',
+              width: 'fit-content',
+            }}
+            onClick={handleBackgroundUpload}
+          >
+            🖼️ Загрузить фон
+          </button>
+          
+          
+          {animations.length > 0 && (
+            <AnimationControls
+              animations={animations}
+              currentAnimation={currentAnimation}
+              onAnimationChange={handleAnimationChange}
+              isPlaying={isPlaying}
+              onPlayPause={handlePlayPause}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+} 
